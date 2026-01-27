@@ -1,0 +1,70 @@
+name: Deploy to Production (Bun)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy to Hetzner
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.HETZNER_HOST }}
+          username: ${{ secrets.HETZNER_USER }}
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          script: |
+            cd /opt/gigz-api
+
+            # Pull latest code
+            git pull origin main
+
+            # Update .env file
+            cat > .env << 'EOF'
+            DATABASE_URL=${{ secrets.DATABASE_URL }}
+            PARSE_APP_ID=${{ secrets.PARSE_APP_ID }}
+            PARSE_MASTER_KEY=${{ secrets.PARSE_MASTER_KEY }}
+            PARSE_CLIENT_KEY=${{ secrets.PARSE_CLIENT_KEY }}
+            PARSE_SERVER_URL=${{ secrets.PARSE_SERVER_URL }}
+            R2_ACCESS_KEY=${{ secrets.R2_ACCESS_KEY }}
+            R2_SECRET_KEY=${{ secrets.R2_SECRET_KEY }}
+            R2_ACCOUNT_ID=${{ secrets.R2_ACCOUNT_ID }}
+            R2_BUCKET=${{ secrets.R2_BUCKET }}
+            R2_PUBLIC_URL=${{ secrets.R2_PUBLIC_URL }}
+            APPLE_BUNDLE_ID=${{ secrets.APPLE_BUNDLE_ID }}
+            RESEND_API_KEY=${{ secrets.RESEND_API_KEY }}
+            EMAIL_FROM=${{ secrets.EMAIL_FROM }}
+            EOF
+
+            # Install dependencies
+            bun install
+
+            # Restart service
+            systemctl restart gigz-api
+
+            # Wait for service to be ready
+            sleep 5
+
+            # Check health
+            if curl -f http://localhost:3000/health; then
+              echo "Deployment successful!"
+            else
+              echo "Health check failed!"
+              systemctl status gigz-api
+              exit 1
+            fi
+
+      - name: Verify deployment
+        run: |
+          sleep 5
+          response=$(curl -s -o /dev/null -w "%{http_code}" https://api.gigz.app/health || echo "Failed")
+          if [ "$response" != "200" ]; then
+            echo "External health check failed with response: $response"
+            exit 1
+          fi
+          echo "✅ Deployment successful! API is live."
