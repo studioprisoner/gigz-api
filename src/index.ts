@@ -2,14 +2,13 @@ import "dotenv/config";
 import express from "express";
 import { ParseServer } from "parse-server";
 import { parseConfig } from "./config/parse.ts";
+import monitoringRoutes from "./routes/monitoring.ts";
 import { initializeSchemas } from "./schema/definitions.ts";
 
 const app = express();
 
-// Health check endpoint
-app.get("/health", (_req, res) => {
-	res.json({ status: "ok", timestamp: new Date().toISOString() });
-});
+// Monitoring endpoints
+app.use("/", monitoringRoutes);
 
 // Initialize and start Parse Server
 async function startServer() {

@@ -1287,7 +1287,10 @@ Parse.Cloud.define(
 		usernameQuery.startsWith("username", searchTerm);
 
 		const fullNameQuery = new Parse.Query(Parse.User);
-		fullNameQuery.matches("full_name", new RegExp(escapeRegex(query.trim()), "i"));
+		fullNameQuery.matches(
+			"full_name",
+			new RegExp(escapeRegex(query.trim()), "i"),
+		);
 
 		const mainQuery = Parse.Query.or(usernameQuery, fullNameQuery);
 

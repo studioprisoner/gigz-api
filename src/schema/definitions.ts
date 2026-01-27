@@ -365,7 +365,9 @@ export async function initializeSchemas(): Promise<void> {
 
 		if (schemaExists && existingSchema) {
 			// Update existing schema with any new fields
-			console.log(`Schema ${schema.className} already exists, checking for updates...`);
+			console.log(
+				`Schema ${schema.className} already exists, checking for updates...`,
+			);
 			const schemaUpdate = new Parse.Schema(schema.className);
 			let hasUpdates = false;
 
@@ -407,7 +409,9 @@ export async function initializeSchemas(): Promise<void> {
 				}
 
 				if (schema.indexes) {
-					for (const [indexName, indexConfig] of Object.entries(schema.indexes)) {
+					for (const [indexName, indexConfig] of Object.entries(
+						schema.indexes,
+					)) {
 						newSchema.addIndex(indexName, indexConfig);
 					}
 				}
