@@ -3,7 +3,7 @@
 
 services:
   api:
-    image: gigz-api:latest
+    image: ghcr.io/studioprisoner/gigz-api:latest
     ports:
       - "127.0.0.1:3000:3000"
     environment:

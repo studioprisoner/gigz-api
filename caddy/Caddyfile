@@ -1,0 +1,77 @@
+# Caddy Configuration for Gigz API
+# This file provides automatic SSL/TLS with Let's Encrypt
+
+# Replace with your actual domain
+api.gigz.app {
+    # Reverse proxy to Bun server
+    reverse_proxy localhost:3000 {
+        # Add headers for proper proxying
+        header_up Host {host}
+        header_up X-Real-IP {remote}
+        header_up X-Forwarded-For {remote}
+        header_up X-Forwarded-Proto {scheme}
+    }
+
+    # Enable compression
+    encode gzip
+
+    # Security headers
+    header {
+        # Disable FLoC tracking
+        Permissions-Policy interest-cohort=()
+
+        # Security headers
+        X-Content-Type-Options nosniff
+        X-Frame-Options DENY
+        X-XSS-Protection "1; mode=block"
+        Referrer-Policy strict-origin-when-cross-origin
+
+        # HSTS (Strict Transport Security)
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+
+        # Remove server header
+        -Server
+    }
+
+    # Health check endpoint (bypass rate limiting)
+    handle /health {
+        reverse_proxy localhost:3000
+    }
+
+    # Parse API endpoints with rate limiting
+    handle /parse/* {
+        # Rate limiting: 10 requests per second per IP
+        rate_limit {remote.host} 10r/s
+
+        reverse_proxy localhost:3000 {
+            header_up Host {host}
+            header_up X-Real-IP {remote}
+            header_up X-Forwarded-For {remote}
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+
+    # Access logs
+    log {
+        output file /var/log/caddy/access.log {
+            roll_size 100mb
+            roll_keep 10
+            roll_keep_for 720h
+        }
+        format json
+    }
+
+    # Handle OPTIONS requests for CORS
+    @options {
+        method OPTIONS
+    }
+    handle @options {
+        header {
+            Access-Control-Allow-Origin *
+            Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+            Access-Control-Allow-Headers "Content-Type, Authorization, X-Parse-Application-Id, X-Parse-Client-Key, X-Parse-Session-Token"
+            Access-Control-Max-Age 86400
+        }
+        respond 204
+    }
+}
