@@ -1,0 +1,36 @@
+# Production Docker Compose
+# Use with: docker compose -f docker-compose.prod.yml up -d
+
+services:
+  api:
+    image: gigz-api:latest
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - PARSE_APP_ID=${PARSE_APP_ID}
+      - PARSE_MASTER_KEY=${PARSE_MASTER_KEY}
+      - PARSE_CLIENT_KEY=${PARSE_CLIENT_KEY}
+      - PARSE_SERVER_URL=${PARSE_SERVER_URL}
+      - R2_ACCESS_KEY=${R2_ACCESS_KEY}
+      - R2_SECRET_KEY=${R2_SECRET_KEY}
+      - R2_ACCOUNT_ID=${R2_ACCOUNT_ID}
+      - R2_BUCKET=${R2_BUCKET}
+      - R2_PUBLIC_URL=${R2_PUBLIC_URL}
+      - APPLE_BUNDLE_ID=${APPLE_BUNDLE_ID}
+      - SMTP_HOST=${SMTP_HOST}
+      - MAILGUN_API_KEY=${MAILGUN_API_KEY}
+      - MAILGUN_DOMAIN=${MAILGUN_DOMAIN}
+      - EMAIL_FROM=${EMAIL_FROM}
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M

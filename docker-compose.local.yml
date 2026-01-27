@@ -1,0 +1,49 @@
+# Optional: Local PostgreSQL for offline development
+# Usage: docker compose -f docker-compose.local.yml up
+#
+# Note: Prefer using Neon dev branch for consistency with production.
+# Only use this for offline development or testing.
+
+services:
+  api:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=postgres://gigz:gigz_password@postgres:5432/gigz
+      - PARSE_APP_ID=${PARSE_APP_ID:-gigz-app}
+      - PARSE_MASTER_KEY=${PARSE_MASTER_KEY:-dev-master-key}
+      - PARSE_CLIENT_KEY=${PARSE_CLIENT_KEY:-dev-client-key}
+      - PARSE_SERVER_URL=http://localhost:3000/parse
+      - R2_ACCESS_KEY=${R2_ACCESS_KEY}
+      - R2_SECRET_KEY=${R2_SECRET_KEY}
+      - R2_ACCOUNT_ID=${R2_ACCOUNT_ID}
+      - R2_BUCKET=${R2_BUCKET:-gigz-photos}
+      - R2_PUBLIC_URL=${R2_PUBLIC_URL}
+      - APPLE_BUNDLE_ID=${APPLE_BUNDLE_ID}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./src:/app/src:ro
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=gigz
+      - POSTGRES_PASSWORD=gigz_password
+      - POSTGRES_DB=gigz
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gigz -d gigz"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
