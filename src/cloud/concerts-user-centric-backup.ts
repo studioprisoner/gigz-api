@@ -16,8 +16,6 @@ interface AddConcertParams {
 	setlist?: string[];
 	setlist_id?: string;
 	setlist_unavailable?: boolean;
-	tour_name?: string;
-	rating?: number;
 }
 
 interface GetUserConcertsParams {
@@ -31,69 +29,15 @@ interface GetUserConcertsParams {
 }
 
 interface UpdateConcertParams {
-	userConcert_id: string;
+	concert_id: string;
 	notes?: string;
 	setlist?: string[];
 	setlist_id?: string;
 	setlist_unavailable?: boolean;
-	rating?: number;
-	is_favorite?: boolean;
 }
 
 /**
- * Find or create a Concert event (shared by multiple users)
- */
-async function findOrCreateConcert(
-	artist: Parse.Object,
-	venue: Parse.Object,
-	concert_date: Date,
-	tour_name?: string
-): Promise<Parse.Object> {
-	// Check if Concert event already exists
-	const concertQuery = new Parse.Query("Concert");
-	concertQuery.equalTo("artist", artist);
-	concertQuery.equalTo("venue", venue);
-
-	// Date comparison within same day
-	const startOfDay = new Date(concert_date);
-	startOfDay.setHours(0, 0, 0, 0);
-	const endOfDay = new Date(concert_date);
-	endOfDay.setHours(23, 59, 59, 999);
-
-	concertQuery.greaterThanOrEqualTo("concert_date", startOfDay);
-	concertQuery.lessThanOrEqualTo("concert_date", endOfDay);
-
-	const existingConcert = await concertQuery.first({ useMasterKey: true });
-
-	if (existingConcert) {
-		// Update attendee count
-		existingConcert.increment("attendee_count");
-		await existingConcert.save(null, { useMasterKey: true });
-		return existingConcert;
-	}
-
-	// Create new Concert event
-	const Concert = Parse.Object.extend("Concert");
-	const concert = new Concert();
-
-	concert.set("artist", artist);
-	concert.set("venue", venue);
-	concert.set("concert_date", concert_date);
-	concert.set("attendee_count", 1);
-
-	if (tour_name) concert.set("tour_name", tour_name.trim());
-
-	// Set ACL - publicly readable, admin writable
-	const acl = new Parse.ACL();
-	acl.setPublicReadAccess(true);
-	concert.setACL(acl);
-
-	await concert.save(null, { useMasterKey: true });
-	return concert;
-}
-
-/**
- * Add a new concert (creates Concert event + UserConcert attendance record)
+ * Add a new concert
  */
 Parse.Cloud.define(
 	"addConcert",
@@ -106,8 +50,6 @@ Parse.Cloud.define(
 			setlist,
 			setlist_id,
 			setlist_unavailable,
-			tour_name,
-			rating,
 		} = request.params;
 		const user = request.user;
 
@@ -145,60 +87,60 @@ Parse.Cloud.define(
 			throw new Parse.Error(Parse.Error.INVALID_VALUE, "Invalid concert date");
 		}
 
-		// Validate rating if provided
-		if (rating !== undefined && (rating < 1 || rating > 5)) {
-			throw new Parse.Error(
-				Parse.Error.INVALID_VALUE,
-				"Rating must be between 1 and 5",
-			);
-		}
-
-		// Find or create the Concert event
-		const concert = await findOrCreateConcert(artist, venue, date, tour_name);
-
-		// Check if user already attended this concert
-		const duplicateQuery = new Parse.Query("UserConcert");
+		// Check for duplicate concert (same user, artist, venue, date)
+		const duplicateQuery = new Parse.Query("Concert");
 		duplicateQuery.equalTo("user", user);
-		duplicateQuery.equalTo("concert", concert);
+		duplicateQuery.equalTo("artist", artist);
+		duplicateQuery.equalTo("venue", venue);
 
-		const existingAttendance = await duplicateQuery.first({ useMasterKey: true });
-		if (existingAttendance) {
+		// Date comparison within same day
+		const startOfDay = new Date(date);
+		startOfDay.setHours(0, 0, 0, 0);
+		const endOfDay = new Date(date);
+		endOfDay.setHours(23, 59, 59, 999);
+
+		duplicateQuery.greaterThanOrEqualTo("concert_date", startOfDay);
+		duplicateQuery.lessThanOrEqualTo("concert_date", endOfDay);
+
+		const existing = await duplicateQuery.first({ useMasterKey: true });
+		if (existing) {
 			throw new Parse.Error(
 				Parse.Error.DUPLICATE_VALUE,
 				"You already have this concert logged",
 			);
 		}
 
-		// Create UserConcert attendance record
-		const UserConcert = Parse.Object.extend("UserConcert");
-		const userConcert = new UserConcert();
+		// Create concert
+		const Concert = Parse.Object.extend("Concert");
+		const concert = new Concert();
 
-		userConcert.set("user", user);
-		userConcert.set("concert", concert);
+		concert.set("artist", artist);
+		concert.set("venue", venue);
+		concert.set("user", user);
+		concert.set("concert_date", date);
 
-		if (notes) userConcert.set("notes", notes.trim());
-		if (setlist) userConcert.set("personal_setlist", setlist);
-		if (rating) userConcert.set("rating", rating);
+		if (notes) concert.set("notes", notes.trim());
+		if (setlist) concert.set("setlist", setlist);
+		if (setlist_id) concert.set("setlist_id", setlist_id);
 		if (setlist_unavailable !== undefined) {
-			userConcert.set("setlist_unavailable", setlist_unavailable);
+			concert.set("setlist_unavailable", setlist_unavailable);
 		}
 
 		// Set ACL - owner can read/write, others can read
 		const acl = new Parse.ACL(user);
 		acl.setPublicReadAccess(true);
-		userConcert.setACL(acl);
+		concert.setACL(acl);
 
-		await userConcert.save(null, { useMasterKey: true });
+		await concert.save(null, { useMasterKey: true });
 
 		// Update user's total_gigs count
 		user.increment("total_gigs");
 		await user.save(null, { useMasterKey: true });
 
-		// Return with full data included
-		const result = userConcert.toJSON();
-		result.concert = concert.toJSON();
-		result.concert.artist = artist.toJSON();
-		result.concert.venue = venue.toJSON();
+		// Return with artist and venue data included
+		const result = concert.toJSON();
+		result.artist = artist.toJSON();
+		result.venue = venue.toJSON();
 
 		return result;
 	},
@@ -206,7 +148,7 @@ Parse.Cloud.define(
 
 /**
  * Get user's concerts with filtering and pagination
- * Now queries UserConcert records with Concert includes
+ * Respects profile visibility and connection key access for upcoming concerts
  */
 Parse.Cloud.define(
 	"getUserConcerts",
@@ -262,48 +204,42 @@ Parse.Cloud.define(
 			);
 		}
 
-		const query = new Parse.Query("UserConcert");
+		const query = new Parse.Query("Concert");
 		query.equalTo("user", targetUser);
-		query.include("concert.artist");
-		query.include("concert.venue");
-		query.descending("concert.concert_date");
+		query.include("artist");
+		query.include("venue");
+		query.descending("concert_date");
 		query.limit(Math.min(limit, 100));
 		query.skip(skip);
 
-		// For filtering by concert properties, we need subqueries
-		if (start_date || end_date || artist_id || venue_id || !canSeeUpcoming) {
-			const concertSubquery = new Parse.Query("Concert");
+		// Date filters
+		if (start_date) {
+			query.greaterThanOrEqualTo("concert_date", new Date(start_date));
+		}
+		if (end_date) {
+			query.lessThanOrEqualTo("concert_date", new Date(end_date));
+		}
 
-			// Date filters
-			if (start_date) {
-				concertSubquery.greaterThanOrEqualTo("concert_date", new Date(start_date));
-			}
-			if (end_date) {
-				concertSubquery.lessThanOrEqualTo("concert_date", new Date(end_date));
-			}
+		// If viewer cannot see upcoming concerts, filter to past only
+		// Today at midnight is the cutoff - today's concerts are "upcoming"
+		if (!canSeeUpcoming) {
+			const today = new Date();
+			today.setHours(0, 0, 0, 0);
+			query.lessThan("concert_date", today);
+		}
 
-			// If viewer cannot see upcoming concerts, filter to past only
-			if (!canSeeUpcoming) {
-				const today = new Date();
-				today.setHours(0, 0, 0, 0);
-				concertSubquery.lessThan("concert_date", today);
-			}
+		// Artist filter
+		if (artist_id) {
+			const artistPointer =
+				Parse.Object.extend("Artist").createWithoutData(artist_id);
+			query.equalTo("artist", artistPointer);
+		}
 
-			// Artist filter
-			if (artist_id) {
-				const artistPointer =
-					Parse.Object.extend("Artist").createWithoutData(artist_id);
-				concertSubquery.equalTo("artist", artistPointer);
-			}
-
-			// Venue filter
-			if (venue_id) {
-				const venuePointer =
-					Parse.Object.extend("Venue").createWithoutData(venue_id);
-				concertSubquery.equalTo("venue", venuePointer);
-			}
-
-			query.matchesQuery("concert", concertSubquery);
+		// Venue filter
+		if (venue_id) {
+			const venuePointer =
+				Parse.Object.extend("Venue").createWithoutData(venue_id);
+			query.equalTo("venue", venuePointer);
 		}
 
 		const [results, total] = await Promise.all([
@@ -312,7 +248,7 @@ Parse.Cloud.define(
 		]);
 
 		return {
-			results: results.map((userConcert) => userConcert.toJSON()),
+			results: results.map((concert) => concert.toJSON()),
 			count: results.length,
 			total,
 			can_see_upcoming: canSeeUpcoming,
@@ -321,12 +257,12 @@ Parse.Cloud.define(
 );
 
 /**
- * Update a user concert attendance record
+ * Update a concert
  */
 Parse.Cloud.define(
 	"updateConcert",
 	async (request: Parse.Cloud.FunctionRequest<UpdateConcertParams>) => {
-		const { userConcert_id, notes, setlist, rating, is_favorite } =
+		const { concert_id, notes, setlist, setlist_id, setlist_unavailable } =
 			request.params;
 		const user = request.user;
 
@@ -337,17 +273,17 @@ Parse.Cloud.define(
 			);
 		}
 
-		if (!userConcert_id) {
-			throw new Parse.Error(Parse.Error.INVALID_VALUE, "UserConcert ID required");
+		if (!concert_id) {
+			throw new Parse.Error(Parse.Error.INVALID_VALUE, "Concert ID required");
 		}
 
-		const query = new Parse.Query("UserConcert");
-		query.include("concert.artist");
-		query.include("concert.venue");
-		const userConcert = await query.get(userConcert_id);
+		const query = new Parse.Query("Concert");
+		query.include("artist");
+		query.include("venue");
+		const concert = await query.get(concert_id);
 
 		// Verify ownership
-		const concertUser = userConcert.get("user");
+		const concertUser = concert.get("user");
 		if (!concertUser || concertUser.id !== user.id) {
 			throw new Parse.Error(
 				Parse.Error.OPERATION_FORBIDDEN,
@@ -355,33 +291,27 @@ Parse.Cloud.define(
 			);
 		}
 
-		// Validate rating if provided
-		if (rating !== undefined && (rating < 1 || rating > 5)) {
-			throw new Parse.Error(
-				Parse.Error.INVALID_VALUE,
-				"Rating must be between 1 and 5",
-			);
+		// Update fields
+		if (notes !== undefined) concert.set("notes", notes?.trim() || "");
+		if (setlist !== undefined) concert.set("setlist", setlist);
+		if (setlist_id !== undefined) concert.set("setlist_id", setlist_id);
+		if (setlist_unavailable !== undefined) {
+			concert.set("setlist_unavailable", setlist_unavailable);
 		}
 
-		// Update fields
-		if (notes !== undefined) userConcert.set("notes", notes?.trim() || "");
-		if (setlist !== undefined) userConcert.set("personal_setlist", setlist);
-		if (rating !== undefined) userConcert.set("rating", rating);
-		if (is_favorite !== undefined) userConcert.set("is_favorite", is_favorite);
+		await concert.save(null, { useMasterKey: true });
 
-		await userConcert.save(null, { useMasterKey: true });
-
-		return userConcert.toJSON();
+		return concert.toJSON();
 	},
 );
 
 /**
- * Delete a user concert attendance record
+ * Delete a concert
  */
 Parse.Cloud.define(
 	"deleteConcert",
-	async (request: Parse.Cloud.FunctionRequest<{ userConcert_id: string }>) => {
-		const { userConcert_id } = request.params;
+	async (request: Parse.Cloud.FunctionRequest<{ concert_id: string }>) => {
+		const { concert_id } = request.params;
 		const user = request.user;
 
 		if (!user) {
@@ -391,16 +321,15 @@ Parse.Cloud.define(
 			);
 		}
 
-		if (!userConcert_id) {
-			throw new Parse.Error(Parse.Error.INVALID_VALUE, "UserConcert ID required");
+		if (!concert_id) {
+			throw new Parse.Error(Parse.Error.INVALID_VALUE, "Concert ID required");
 		}
 
-		const query = new Parse.Query("UserConcert");
-		query.include("concert");
-		const userConcert = await query.get(userConcert_id);
+		const query = new Parse.Query("Concert");
+		const concert = await query.get(concert_id);
 
 		// Verify ownership
-		const concertUser = userConcert.get("user");
+		const concertUser = concert.get("user");
 		if (!concertUser || concertUser.id !== user.id) {
 			throw new Parse.Error(
 				Parse.Error.OPERATION_FORBIDDEN,
@@ -408,31 +337,17 @@ Parse.Cloud.define(
 			);
 		}
 
-		const concert = userConcert.get("concert");
-
 		// Delete associated photos
 		const photoQuery = new Parse.Query("ConcertPhoto");
-		photoQuery.equalTo("userConcert", userConcert);
+		photoQuery.equalTo("concert", concert);
 		const photos = await photoQuery.find({ useMasterKey: true });
 
 		if (photos.length > 0) {
 			await Parse.Object.destroyAll(photos, { useMasterKey: true });
 		}
 
-		// Delete UserConcert
-		await userConcert.destroy({ useMasterKey: true });
-
-		// Update Concert attendee count
-		if (concert) {
-			concert.increment("attendee_count", -1);
-			await concert.save(null, { useMasterKey: true });
-
-			// If no more attendees, optionally delete the Concert event
-			// (uncomment if you want to clean up empty events)
-			// if (concert.get("attendee_count") <= 0) {
-			//   await concert.destroy({ useMasterKey: true });
-			// }
-		}
+		// Delete concert
+		await concert.destroy({ useMasterKey: true });
 
 		// Update user's total_gigs count
 		user.increment("total_gigs", -1);
@@ -443,41 +358,10 @@ Parse.Cloud.define(
 );
 
 /**
- * Get UserConcert by ID with full details
+ * Get concert by ID with full details
  */
 Parse.Cloud.define(
 	"getConcert",
-	async (request: Parse.Cloud.FunctionRequest<{ userConcert_id: string }>) => {
-		const { userConcert_id } = request.params;
-
-		if (!userConcert_id) {
-			throw new Parse.Error(Parse.Error.INVALID_VALUE, "UserConcert ID required");
-		}
-
-		const query = new Parse.Query("UserConcert");
-		query.include("concert.artist");
-		query.include("concert.venue");
-		query.include("user");
-		const userConcert = await query.get(userConcert_id);
-
-		// Get photos for this user's concert
-		const photoQuery = new Parse.Query("ConcertPhoto");
-		photoQuery.equalTo("userConcert", userConcert);
-		photoQuery.descending("createdAt");
-		const photos = await photoQuery.find();
-
-		const result = userConcert.toJSON();
-		result.photos = photos.map((photo) => photo.toJSON());
-
-		return result;
-	},
-);
-
-/**
- * Get concert event details (shared event info)
- */
-Parse.Cloud.define(
-	"getConcertEvent",
 	async (request: Parse.Cloud.FunctionRequest<{ concert_id: string }>) => {
 		const { concert_id } = request.params;
 
@@ -488,23 +372,17 @@ Parse.Cloud.define(
 		const query = new Parse.Query("Concert");
 		query.include("artist");
 		query.include("venue");
+		query.include("user");
 		const concert = await query.get(concert_id);
 
-		// Get all attendees (UserConcerts) for this event
-		const attendeesQuery = new Parse.Query("UserConcert");
-		attendeesQuery.equalTo("concert", concert);
-		attendeesQuery.include("user");
-		attendeesQuery.limit(100); // Adjust as needed
-		const attendees = await attendeesQuery.find();
+		// Get photos for this concert
+		const photoQuery = new Parse.Query("ConcertPhoto");
+		photoQuery.equalTo("concert", concert);
+		photoQuery.descending("createdAt");
+		const photos = await photoQuery.find();
 
 		const result = concert.toJSON();
-		result.attendees = attendees.map((uc) => ({
-			userConcert_id: uc.id,
-			user: uc.get("user")?.toJSON(),
-			notes: uc.get("notes"),
-			rating: uc.get("rating"),
-			is_favorite: uc.get("is_favorite"),
-		}));
+		result.photos = photos.map((photo) => photo.toJSON());
 
 		return result;
 	},
@@ -512,7 +390,6 @@ Parse.Cloud.define(
 
 /**
  * Get concerts on this day in history (for "On This Day" feature)
- * Updated to work with UserConcert records
  */
 Parse.Cloud.define(
 	"getConcertsOnThisDay",
@@ -541,18 +418,19 @@ Parse.Cloud.define(
 			targetUser = user;
 		}
 
-		// Query UserConcerts with Concert includes
-		const query = new Parse.Query("UserConcert");
+		// This requires a raw query or aggregation to match month/day
+		// For now, we'll fetch all user concerts and filter in JS
+		// In production, this could be optimized with a database function
+		const query = new Parse.Query("Concert");
 		query.equalTo("user", targetUser);
-		query.include("concert.artist");
-		query.include("concert.venue");
-		query.descending("concert.concert_date");
+		query.include("artist");
+		query.include("venue");
+		query.descending("concert_date");
 		query.limit(1000);
 
-		const userConcerts = await query.find();
+		const concerts = await query.find();
 
-		const matchingConcerts = userConcerts.filter((userConcert) => {
-			const concert = userConcert.get("concert");
+		const matchingConcerts = concerts.filter((concert) => {
 			const concertDate = concert.get("concert_date");
 			return (
 				concertDate.getMonth() + 1 === month && concertDate.getDate() === day
@@ -560,7 +438,7 @@ Parse.Cloud.define(
 		});
 
 		return {
-			results: matchingConcerts.map((userConcert) => userConcert.toJSON()),
+			results: matchingConcerts.map((concert) => concert.toJSON()),
 			count: matchingConcerts.length,
 		};
 	},
@@ -568,7 +446,7 @@ Parse.Cloud.define(
 
 /**
  * Get concert statistics for a user
- * Updated to work with UserConcert table
+ * Uses Bun.sql for efficient database aggregations (~1.86x faster than pg)
  */
 Parse.Cloud.define(
 	"getConcertStats",
@@ -595,7 +473,6 @@ Parse.Cloud.define(
 		const userPointer = toPointer("_User", targetUserId);
 
 		// Run all aggregation queries in parallel using Bun.sql
-		// Updated to query UserConcert table
 		const [
 			summaryStats,
 			topArtistsResult,
@@ -603,15 +480,14 @@ Parse.Cloud.define(
 			topCitiesResult,
 			yearlyStats,
 		] = await Promise.all([
-			// Summary statistics from UserConcert
+			// Summary statistics
 			db`
 				SELECT
 					COUNT(*)::int as total_concerts,
-					COUNT(DISTINCT c."_p_artist")::int as unique_artists,
-					COUNT(DISTINCT c."_p_venue")::int as unique_venues
-				FROM "UserConcert" uc
-				JOIN "Concert" c ON c."_id" = SPLIT_PART(uc."_p_concert", '$', 2)
-				WHERE uc."_p_user" = ${userPointer}
+					COUNT(DISTINCT "_p_artist")::int as unique_artists,
+					COUNT(DISTINCT "_p_venue")::int as unique_venues
+				FROM "Concert"
+				WHERE "_p_user" = ${userPointer}
 			`,
 
 			// Top 10 artists
@@ -620,10 +496,9 @@ Parse.Cloud.define(
 					SPLIT_PART(c."_p_artist", '$', 2) as id,
 					a."name",
 					COUNT(*)::int as count
-				FROM "UserConcert" uc
-				JOIN "Concert" c ON c."_id" = SPLIT_PART(uc."_p_concert", '$', 2)
+				FROM "Concert" c
 				LEFT JOIN "Artist" a ON a."_id" = SPLIT_PART(c."_p_artist", '$', 2)
-				WHERE uc."_p_user" = ${userPointer}
+				WHERE c."_p_user" = ${userPointer}
 				GROUP BY c."_p_artist", a."name"
 				ORDER BY count DESC
 				LIMIT 10
@@ -635,10 +510,9 @@ Parse.Cloud.define(
 					SPLIT_PART(c."_p_venue", '$', 2) as id,
 					v."name",
 					COUNT(*)::int as count
-				FROM "UserConcert" uc
-				JOIN "Concert" c ON c."_id" = SPLIT_PART(uc."_p_concert", '$', 2)
+				FROM "Concert" c
 				LEFT JOIN "Venue" v ON v."_id" = SPLIT_PART(c."_p_venue", '$', 2)
-				WHERE uc."_p_user" = ${userPointer}
+				WHERE c."_p_user" = ${userPointer}
 				GROUP BY c."_p_venue", v."name"
 				ORDER BY count DESC
 				LIMIT 10
@@ -649,10 +523,9 @@ Parse.Cloud.define(
 				SELECT
 					v."city",
 					COUNT(*)::int as count
-				FROM "UserConcert" uc
-				JOIN "Concert" c ON c."_id" = SPLIT_PART(uc."_p_concert", '$', 2)
+				FROM "Concert" c
 				LEFT JOIN "Venue" v ON v."_id" = SPLIT_PART(c."_p_venue", '$', 2)
-				WHERE uc."_p_user" = ${userPointer}
+				WHERE c."_p_user" = ${userPointer}
 					AND v."city" IS NOT NULL
 				GROUP BY v."city"
 				ORDER BY count DESC
@@ -662,12 +535,11 @@ Parse.Cloud.define(
 			// Concerts by year
 			db`
 				SELECT
-					EXTRACT(YEAR FROM c."concert_date")::int as year,
+					EXTRACT(YEAR FROM "concert_date")::int as year,
 					COUNT(*)::int as count
-				FROM "UserConcert" uc
-				JOIN "Concert" c ON c."_id" = SPLIT_PART(uc."_p_concert", '$', 2)
-				WHERE uc."_p_user" = ${userPointer}
-				GROUP BY EXTRACT(YEAR FROM c."concert_date")
+				FROM "Concert"
+				WHERE "_p_user" = ${userPointer}
+				GROUP BY EXTRACT(YEAR FROM "concert_date")
 				ORDER BY year DESC
 			`,
 		]);
