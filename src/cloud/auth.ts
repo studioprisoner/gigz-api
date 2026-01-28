@@ -148,12 +148,15 @@ Parse.Cloud.define(
 			}
 
 			// Check if user already exists with this Apple ID
-			// We need to check the authData JSON field directly since Parse's dot notation doesn't work with PostgreSQL
-			const existingUserQuery = new Parse.Query(Parse.User);
-			existingUserQuery.matches("authData", new RegExp(appleUserId, "i"));
-			const existingUser = await existingUserQuery.first({
-				useMasterKey: true,
-			});
+			// Search for users with Apple auth data and then filter manually
+			const allUsersQuery = new Parse.Query(Parse.User);
+			allUsersQuery.exists("authData");
+			const usersWithAuth = await allUsersQuery.find({ useMasterKey: true });
+
+			const existingUser = usersWithAuth.find(user => {
+				const authData = user.get("authData");
+				return authData?.apple?.id === appleUserId;
+			}) || null;
 
 			const isNewUser = !existingUser;
 
