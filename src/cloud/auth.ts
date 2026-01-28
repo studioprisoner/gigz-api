@@ -153,10 +153,36 @@ Parse.Cloud.define(
 			allUsersQuery.exists("authData");
 			const usersWithAuth = await allUsersQuery.find({ useMasterKey: true });
 
-			const existingUser = usersWithAuth.find(user => {
+			let existingUser = usersWithAuth.find(user => {
 				const authData = user.get("authData");
 				return authData?.apple?.id === appleUserId;
 			}) || null;
+
+			// If no exact Apple ID match and we have an email, check for migrated users by email
+			if (!existingUser && email) {
+				console.log(`[signInWithApple] No exact Apple ID match found for ${appleUserId}, checking by email: ${email}`);
+
+				const emailQuery = new Parse.Query(Parse.User);
+				emailQuery.equalTo("email", email);
+				emailQuery.exists("authData");
+				const userByEmail = await emailQuery.first({ useMasterKey: true });
+
+				if (userByEmail) {
+					const authData = userByEmail.get("authData");
+					// Check if this user has a migrated Apple auth (starts with "apple_migrated_")
+					if (authData?.apple?.id?.startsWith("apple_migrated_")) {
+						console.log(`[signInWithApple] Found migrated user by email, updating Apple ID from ${authData.apple.id} to ${appleUserId}`);
+						existingUser = userByEmail;
+
+						// Update the migrated Apple ID to the real one
+						const updatedAuthData = { ...authData };
+						updatedAuthData.apple.id = appleUserId;
+						updatedAuthData.apple.token = identityToken;
+						existingUser.set("authData", updatedAuthData);
+						await existingUser.save(null, { useMasterKey: true });
+					}
+				}
+			}
 
 			const isNewUser = !existingUser;
 

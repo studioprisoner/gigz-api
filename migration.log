@@ -1,0 +1,218 @@
+$ bun run migrations/migrate-single-user.ts
+[dotenv@17.2.3] injecting env (0) from .env -- tip: ⚙️  suppress all logs with { quiet: true }
+
+🎯 Starting targeted migration for user: josh@studioprisoner.com
+
+📥 Fetching user from Supabase...
+✅ Found user: studioprisoner (526572ec-e52e-462e-9d18-89e460209496)
+   Email: josh@studioprisoner.com
+   Total gigs: 83
+
+📥 Fetching concerts from Supabase...
+✅ Found 82 concerts
+
+📥 Fetching artists from Supabase...
+
+📥 Fetching venues from Supabase...
+
+🔍 Checking if user exists in Parse...
+⚠️  User already exists in Parse: IFQ5UsBvuj
+   Will update existing user...
+✅ Updated user profile
+
+🎵 Migrating concerts...
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+  ⚠️  Skipping concert with missing artist/venue data
+
+🔧 Transferring Apple authentication...
+
+❌ Migration failed: 21 |   /**
+22 |    * @param {number} code An error code constant from <code>Parse.Error</code>.
+23 |    * @param {string} message A detailed description of the error.
+24 |    */
+25 |   constructor(code, message) {
+26 |     super(message);
+         ^
+error: id token is invalid for this user.
+    code: 101,
+
+      at new ParseError (/Users/josh/Projects/gigz-api/node_modules/parse/lib/node/ParseError.js:26:5)
+      at handleError (/Users/josh/Projects/gigz-api/node_modules/parse/lib/node/RESTController.js:327:15)
+
+
+💥 Migration failed: 21 |   /**
+22 |    * @param {number} code An error code constant from <code>Parse.Error</code>.
+23 |    * @param {string} message A detailed description of the error.
+24 |    */
+25 |   constructor(code, message) {
+26 |     super(message);
+         ^
+error: id token is invalid for this user.
+    code: 101,
+
+      at new ParseError (/Users/josh/Projects/gigz-api/node_modules/parse/lib/node/ParseError.js:26:5)
+      at handleError (/Users/josh/Projects/gigz-api/node_modules/parse/lib/node/RESTController.js:327:15)
+
+error: script "migrate-single-user" exited with code 1
