@@ -188,44 +188,93 @@ Parse.Cloud.define(
 				}
 			}
 
-			console.log(
-				`[signInWithApple] Making REST API call to ${serverUrl}/users`,
-			);
+			let sessionToken: string;
+			let resultUser: Parse.User;
 
-			// Make REST API call to Parse Server's users endpoint
-			// This properly creates a session token for the user
-			// Use master key to bypass auth adapter restrictions
-			const response = await fetch(`${serverUrl}/users`, {
-				method: "POST",
-				headers: {
-					"X-Parse-Application-Id": appId || "",
-					"X-Parse-Master-Key": masterKey || "",
-					"Content-Type": "application/json",
-				},
-				body: JSON.stringify(userData),
-			});
+			if (isNewUser) {
+				// Create new user via REST API
+				console.log(`[signInWithApple] Creating new user via ${serverUrl}/users`);
 
-			if (!response.ok) {
-				const errorText = await response.text();
-				console.error(
-					`[signInWithApple] REST API error: ${response.status} ${errorText}`,
-				);
-				let errorData: { code?: number; error?: string };
-				try {
-					errorData = JSON.parse(errorText);
-				} catch {
-					errorData = { error: errorText };
+				const response = await fetch(`${serverUrl}/users`, {
+					method: "POST",
+					headers: {
+						"X-Parse-Application-Id": appId || "",
+						"X-Parse-Master-Key": masterKey || "",
+						"Content-Type": "application/json",
+					},
+					body: JSON.stringify(userData),
+				});
+
+				if (!response.ok) {
+					const errorText = await response.text();
+					console.error(`[signInWithApple] REST API error: ${response.status} ${errorText}`);
+					let errorData: { code?: number; error?: string };
+					try {
+						errorData = JSON.parse(errorText);
+					} catch {
+						errorData = { error: errorText };
+					}
+					throw new Parse.Error(
+						errorData.code || Parse.Error.INTERNAL_SERVER_ERROR,
+						errorData.error || "Failed to authenticate with Apple",
+					);
 				}
-				throw new Parse.Error(
-					errorData.code || Parse.Error.INTERNAL_SERVER_ERROR,
-					errorData.error || "Failed to authenticate with Apple",
-				);
+
+				const result = await response.json();
+				sessionToken = result.sessionToken;
+				resultUser = await new Parse.Query(Parse.User).get(result.objectId, { useMasterKey: true });
+			} else {
+				// Login existing user by creating a session via REST API
+				console.log(`[signInWithApple] Logging in existing user ${existingUser!.id}`);
+
+				// Update the user's auth token first
+				const currentAuthData = existingUser!.get("authData") || {};
+				currentAuthData.apple = {
+					id: appleUserId,
+					token: identityToken,
+				};
+				existingUser!.set("authData", currentAuthData);
+				await existingUser!.save(null, { useMasterKey: true });
+
+				// Create session token via Parse Server's sessions endpoint
+				const sessionData = {
+					user: {
+						__type: "Pointer",
+						className: "_User",
+						objectId: existingUser!.id,
+					},
+					restricted: false,
+				};
+
+				const response = await fetch(`${serverUrl}/sessions`, {
+					method: "POST",
+					headers: {
+						"X-Parse-Application-Id": appId || "",
+						"X-Parse-Master-Key": masterKey || "",
+						"Content-Type": "application/json",
+					},
+					body: JSON.stringify(sessionData),
+				});
+
+				if (!response.ok) {
+					const errorText = await response.text();
+					console.error(`[signInWithApple] Session creation error: ${response.status} ${errorText}`);
+					let errorData: { code?: number; error?: string };
+					try {
+						errorData = JSON.parse(errorText);
+					} catch {
+						errorData = { error: errorText };
+					}
+					throw new Parse.Error(
+						errorData.code || Parse.Error.INTERNAL_SERVER_ERROR,
+						errorData.error || "Failed to create session",
+					);
+				}
+
+				const result = await response.json();
+				sessionToken = result.sessionToken;
+				resultUser = existingUser!;
 			}
-
-			console.log(`[signInWithApple] REST API success, parsing response`);
-
-			const result = await response.json();
-			const sessionToken = result.sessionToken;
 
 			if (!sessionToken) {
 				throw new Parse.Error(
@@ -234,15 +283,9 @@ Parse.Cloud.define(
 				);
 			}
 
-			// Fetch fresh user data
-			const freshUserQuery = new Parse.Query(Parse.User);
-			const freshUser = await freshUserQuery.get(result.objectId, {
-				useMasterKey: true,
-			});
-
 			return {
 				sessionToken,
-				user: formatUserProfile(freshUser),
+				user: formatUserProfile(resultUser),
 				isNewUser,
 			};
 		} catch (error) {
