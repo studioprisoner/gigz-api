@@ -240,7 +240,12 @@ Parse.Cloud.define(
 				existingUser!.set("authData", currentAuthData);
 				await existingUser!.save(null, { useMasterKey: true });
 
-				// Create session token via Parse Server's sessions endpoint
+				// Create session by using Parse.User.become() with a generated token
+				// First generate a session token
+				const crypto = require('crypto');
+				const generatedSessionToken = `r:${crypto.randomBytes(16).toString('hex')}`;
+
+				// Create session via REST API with the generated token
 				const sessionData = {
 					user: {
 						__type: "Pointer",
@@ -248,6 +253,7 @@ Parse.Cloud.define(
 						objectId: existingUser!.id,
 					},
 					restricted: false,
+					sessionToken: generatedSessionToken,
 				};
 
 				const response = await fetch(`${serverUrl}/sessions`, {
@@ -275,8 +281,7 @@ Parse.Cloud.define(
 					);
 				}
 
-				const result = await response.json();
-				sessionToken = result.sessionToken;
+				sessionToken = generatedSessionToken;
 				resultUser = existingUser!;
 			}
 
