@@ -334,6 +334,18 @@ Parse.Cloud.define(
 
 		const total = countResult[0]?.total || 0;
 
+		// Helper to format dates in Parse format
+		const formatDate = (date: any) => {
+			if (!date) return null;
+			// If it's already in Parse format, return as-is
+			if (date.__type === "Date") return date;
+			// Convert to Parse Date format
+			return {
+				__type: "Date",
+				iso: date instanceof Date ? date.toISOString() : new Date(date).toISOString()
+			};
+		};
+
 		// Transform results to match Parse format
 		const formattedResults = results.map((row: any) => ({
 			objectId: row.userConcert_id,
@@ -343,14 +355,14 @@ Parse.Cloud.define(
 			is_favorite: row.is_favorite,
 			like_count: row.like_count,
 			comment_count: row.comment_count,
-			createdAt: row.userConcert_createdAt,
-			updatedAt: row.userConcert_updatedAt,
+			createdAt: formatDate(row.userConcert_createdAt),
+			updatedAt: formatDate(row.userConcert_updatedAt),
 			concert: {
 				objectId: row.concert_id,
-				concert_date: row.concert_date,
+				concert_date: formatDate(row.concert_date),
 				tour_name: row.tour_name,
 				attendee_count: row.attendee_count,
-				createdAt: row.concert_createdAt,
+				createdAt: formatDate(row.concert_createdAt),
 				artist: {
 					objectId: row.artist_id,
 					name: row.artist_name,
