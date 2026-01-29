@@ -348,10 +348,11 @@ Parse.Cloud.define(
 
 		// Transform results to match Parse format
 		// Note: PostgreSQL converts unquoted column aliases to lowercase
+		// PERFORMANCE OPTIMIZATION: Exclude personal_setlist from list view to reduce payload
 		const formattedResults = results.map((row: any) => ({
 			objectId: row.userconcert_id,
 			notes: row.notes,
-			personal_setlist: row.personal_setlist,
+			// personal_setlist excluded from list view - use getConcertSetlist endpoint
 			rating: row.rating,
 			is_favorite: row.is_favorite,
 			like_count: row.like_count,
@@ -398,6 +399,69 @@ Parse.Cloud.define(
 			can_see_upcoming: canSeeUpcoming,
 		};
 	},
+);
+
+/**
+ * Get setlist data for a specific concert (lazy loading endpoint)
+ * Optimized for mobile performance - load setlists on demand
+ */
+Parse.Cloud.define(
+	"getConcertSetlist",
+	async (request: Parse.Cloud.FunctionRequest<{ userConcert_id: string }>) => {
+		const { userConcert_id } = request.params;
+		const currentUser = request.user;
+
+		if (!currentUser) {
+			throw new Parse.Error(
+				Parse.Error.INVALID_SESSION_TOKEN,
+				"User must be authenticated"
+			);
+		}
+
+		if (!userConcert_id) {
+			throw new Parse.Error(
+				Parse.Error.INVALID_VALUE,
+				"UserConcert ID required"
+			);
+		}
+
+		// Fetch the UserConcert with minimal data
+		const query = new Parse.Query("UserConcert");
+		const userConcert = await query.get(userConcert_id, { useMasterKey: true });
+
+		// Verify user can access this concert
+		const concertUser = userConcert.get("user");
+		if (!concertUser || concertUser.id !== currentUser.id) {
+			throw new Parse.Error(
+				Parse.Error.OPERATION_FORBIDDEN,
+				"You can only access your own concerts"
+			);
+		}
+
+		// Get setlist data and parse as JSON array if it's stored as string
+		const personalSetlist = userConcert.get("personal_setlist");
+		let setlistArray = null;
+
+		if (personalSetlist) {
+			if (typeof personalSetlist === "string") {
+				try {
+					// Parse JSON string to array
+					setlistArray = JSON.parse(personalSetlist);
+				} catch (error) {
+					// If parsing fails, treat as single-item array
+					setlistArray = [personalSetlist];
+				}
+			} else if (Array.isArray(personalSetlist)) {
+				// Already an array
+				setlistArray = personalSetlist;
+			}
+		}
+
+		return {
+			userConcert_id: userConcert_id,
+			personal_setlist: setlistArray || []
+		};
+	}
 );
 
 /**
@@ -548,6 +612,18 @@ Parse.Cloud.define(
 
 		const result = userConcert.toJSON();
 		result.photos = photos.map((photo) => photo.toJSON());
+
+		// Normalize personal_setlist to JSON array format for consistency
+		if (result.personal_setlist) {
+			if (typeof result.personal_setlist === "string") {
+				try {
+					result.personal_setlist = JSON.parse(result.personal_setlist);
+				} catch (error) {
+					// If parsing fails, treat as single-item array
+					result.personal_setlist = [result.personal_setlist];
+				}
+			}
+		}
 
 		return result;
 	},
