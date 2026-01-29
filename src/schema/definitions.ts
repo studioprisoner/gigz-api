@@ -144,10 +144,10 @@ export const schemas: SchemaDefinition[] = [
 			attendee_count: { type: "Number", defaultValue: 0 },
 		},
 		indexes: {
-			artist_index: { artist: 1 },
-			venue_index: { venue: 1 },
+			artist_index: { "_p_artist": 1 },
+			venue_index: { "_p_venue": 1 },
 			date_index: { concert_date: -1 },
-			artist_venue_date_unique: { artist: 1, venue: 1, concert_date: 1 },
+			artist_venue_date_unique: { "_p_artist": 1, "_p_venue": 1, concert_date: 1 },
 		},
 		classLevelPermissions: publicReadAuthWrite,
 	},
@@ -164,10 +164,10 @@ export const schemas: SchemaDefinition[] = [
 			comment_count: { type: "Number", defaultValue: 0 },
 		},
 		indexes: {
-			user_index: { user: 1 },
-			concert_index: { concert: 1 },
-			user_date_index: { user: 1, createdAt: -1 },
-			user_concert_unique: { user: 1, concert: 1 },
+			user_index: { "_p_user": 1 },
+			concert_index: { "_p_concert": 1 },
+			user_date_index: { "_p_user": 1, createdAt: -1 },
+			user_concert_unique: { "_p_user": 1, "_p_concert": 1 },
 		},
 		classLevelPermissions: authOnlyOwnerModify,
 	},
@@ -199,8 +199,8 @@ export const schemas: SchemaDefinition[] = [
 			like_count: { type: "Number", defaultValue: 0 },
 		},
 		indexes: {
-			userConcert_index: { userConcert: 1 },
-			user_index: { user: 1 },
+			userConcert_index: { "_p_userConcert": 1 },
+			user_index: { "_p_user": 1 },
 		},
 		classLevelPermissions: authOnlyOwnerModify,
 	},
@@ -216,7 +216,7 @@ export const schemas: SchemaDefinition[] = [
 			followers_enabled: { type: "Boolean", defaultValue: true },
 		},
 		indexes: {
-			user_unique: { user: 1 },
+			user_unique: { "_p_user": 1 },
 		},
 		classLevelPermissions: privateUserOnly,
 	},
@@ -228,9 +228,9 @@ export const schemas: SchemaDefinition[] = [
 			following: { type: "Pointer", targetClass: "_User", required: true },
 		},
 		indexes: {
-			follower_following_unique: { follower: 1, following: 1 },
-			follower_index: { follower: 1 },
-			following_index: { following: 1 },
+			follower_following_unique: { "_p_follower": 1, "_p_following": 1 },
+			follower_index: { "_p_follower": 1 },
+			following_index: { "_p_following": 1 },
 		},
 		classLevelPermissions: socialOwnerOnly,
 	},
@@ -244,10 +244,10 @@ export const schemas: SchemaDefinition[] = [
 			target_id: { type: "String", required: true },
 		},
 		indexes: {
-			user_target_unique: { user: 1, target_type: 1, target_id: 1 },
-			userConcert_index: { userConcert: 1 },
-			photo_index: { photo: 1 },
-			user_index: { user: 1 },
+			user_target_unique: { "_p_user": 1, target_type: 1, target_id: 1 },
+			userConcert_index: { "_p_userConcert": 1 },
+			photo_index: { "_p_photo": 1 },
+			user_index: { "_p_user": 1 },
 		},
 		classLevelPermissions: socialOwnerOnly,
 	},
@@ -262,9 +262,9 @@ export const schemas: SchemaDefinition[] = [
 			is_deleted: { type: "Boolean", defaultValue: false },
 		},
 		indexes: {
-			userConcert_created_index: { userConcert: 1, createdAt: -1 },
-			user_index: { user: 1 },
-			parent_index: { parent: 1 },
+			userConcert_created_index: { "_p_userConcert": 1, createdAt: -1 },
+			user_index: { "_p_user": 1 },
+			parent_index: { "_p_parent": 1 },
 		},
 		classLevelPermissions: socialOwnerOnly,
 	},
@@ -281,8 +281,8 @@ export const schemas: SchemaDefinition[] = [
 			is_read: { type: "Boolean", defaultValue: false },
 		},
 		indexes: {
-			recipient_created_index: { recipient: 1, createdAt: -1 },
-			recipient_read_index: { recipient: 1, is_read: 1 },
+			recipient_created_index: { "_p_recipient": 1, createdAt: -1 },
+			recipient_read_index: { "_p_recipient": 1, is_read: 1 },
 			created_index: { createdAt: -1 },
 		},
 		classLevelPermissions: socialOwnerOnly,
@@ -296,10 +296,10 @@ export const schemas: SchemaDefinition[] = [
 			is_active: { type: "Boolean", defaultValue: true },
 		},
 		indexes: {
-			granter_grantee_unique: { granter: 1, grantee: 1 },
-			granter_index: { granter: 1 },
-			grantee_index: { grantee: 1 },
-			grantee_active_index: { grantee: 1, is_active: 1 },
+			granter_grantee_unique: { "_p_granter": 1, "_p_grantee": 1 },
+			granter_index: { "_p_granter": 1 },
+			grantee_index: { "_p_grantee": 1 },
+			grantee_active_index: { "_p_grantee": 1, is_active: 1 },
 		},
 		classLevelPermissions: socialOwnerOnly,
 	},
@@ -432,19 +432,39 @@ export async function initializeSchemas(): Promise<void> {
 					newSchema.addField(fieldName, type, options);
 				}
 
-				if (schema.indexes) {
-					for (const [indexName, indexConfig] of Object.entries(
-						schema.indexes,
-					)) {
-						newSchema.addIndex(indexName, indexConfig);
-					}
-				}
+				// Don't add indexes during initial schema creation
+				// They will be added in a separate step after fields are created
 
 				newSchema.setCLP(schema.classLevelPermissions);
 				await newSchema.save();
 				console.log(`  Created ${schema.className}`);
 			} catch (error) {
 				console.error(`  Error creating ${schema.className}:`, error);
+			}
+		}
+	}
+
+	// Now add indexes to all schemas in a separate pass
+	for (const schema of schemas) {
+		if (schema.indexes) {
+			console.log(`Adding indexes to ${schema.className}...`);
+			try {
+				const schemaUpdate = new Parse.Schema(schema.className);
+
+				// Get existing schema to check which indexes already exist
+				const existingSchema = await new Parse.Schema(schema.className).get();
+				const existingIndexes = existingSchema.indexes || {};
+
+				for (const [indexName, indexConfig] of Object.entries(schema.indexes)) {
+					if (!existingIndexes[indexName]) {
+						schemaUpdate.addIndex(indexName, indexConfig);
+					}
+				}
+
+				await schemaUpdate.update();
+				console.log(`  Added indexes to ${schema.className}`);
+			} catch (error) {
+				console.error(`  Error adding indexes to ${schema.className}:`, error);
 			}
 		}
 	}
