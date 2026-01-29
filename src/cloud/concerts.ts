@@ -206,7 +206,7 @@ Parse.Cloud.define(
 
 /**
  * Get user's concerts with filtering and pagination
- * Now queries UserConcert records with Concert includes
+ * FIXED: Uses direct SQL queries to work around Parse pointer field mapping issue
  */
 Parse.Cloud.define(
 	"getUserConcerts",
@@ -262,58 +262,125 @@ Parse.Cloud.define(
 			);
 		}
 
-		const query = new Parse.Query("UserConcert");
-		query.equalTo("user", targetUser);
-		query.include("concert.artist");
-		query.include("concert.venue");
-		query.descending("concert.concert_date");
-		query.limit(Math.min(limit, 100));
-		query.skip(skip);
+		// WORKAROUND: Use direct SQL query due to Parse pointer mapping issue
+		// Parse generates "user" = 'id' instead of "_p_user" = '_User$id'
+		const userPointer = toPointer("_User", targetUser.id);
 
-		// For filtering by concert properties, we need subqueries
-		if (start_date || end_date || artist_id || venue_id || !canSeeUpcoming) {
-			const concertSubquery = new Parse.Query("Concert");
+		// Build filter conditions
+		const today = !canSeeUpcoming ? new Date() : null;
+		if (today) today.setHours(0, 0, 0, 0);
 
-			// Date filters
-			if (start_date) {
-				concertSubquery.greaterThanOrEqualTo("concert_date", new Date(start_date));
-			}
-			if (end_date) {
-				concertSubquery.lessThanOrEqualTo("concert_date", new Date(end_date));
-			}
+		const startDate = start_date ? new Date(start_date) : null;
+		const endDate = end_date ? new Date(end_date) : null;
+		const artistPointer = artist_id ? toPointer("Artist", artist_id) : null;
+		const venuePointer = venue_id ? toPointer("Venue", venue_id) : null;
 
-			// If viewer cannot see upcoming concerts, filter to past only
-			if (!canSeeUpcoming) {
-				const today = new Date();
-				today.setHours(0, 0, 0, 0);
-				concertSubquery.lessThan("concert_date", today);
-			}
+		// Execute query with proper joins using Bun SQL template
+		const results = await db`
+			SELECT
+				uc."objectId" as userConcert_id,
+				uc."notes",
+				uc."personal_setlist",
+				uc."rating",
+				uc."is_favorite",
+				uc."like_count",
+				uc."comment_count",
+				uc."createdAt" as userConcert_createdAt,
+				uc."updatedAt" as userConcert_updatedAt,
+				c."objectId" as concert_id,
+				c."concert_date",
+				c."tour_name",
+				c."attendee_count",
+				c."createdAt" as concert_createdAt,
+				a."objectId" as artist_id,
+				a."name" as artist_name,
+				a."slug" as artist_slug,
+				a."image_url" as artist_image_url,
+				a."spotify_id" as artist_spotify_id,
+				a."verified" as artist_verified,
+				v."objectId" as venue_id,
+				v."name" as venue_name,
+				v."slug" as venue_slug,
+				v."city" as venue_city,
+				v."country" as venue_country,
+				v."capacity" as venue_capacity
+			FROM "UserConcert" uc
+			JOIN "Concert" c ON c."objectId" = SPLIT_PART(uc."_p_concert", '$', 2)
+			LEFT JOIN "Artist" a ON a."objectId" = SPLIT_PART(c."_p_artist", '$', 2)
+			LEFT JOIN "Venue" v ON v."objectId" = SPLIT_PART(c."_p_venue", '$', 2)
+			WHERE uc."_p_user" = ${userPointer}
+			${today ? db`AND c."concert_date" < ${today}` : db``}
+			${startDate ? db`AND c."concert_date" >= ${startDate}` : db``}
+			${endDate ? db`AND c."concert_date" <= ${endDate}` : db``}
+			${artistPointer ? db`AND c."_p_artist" = ${artistPointer}` : db``}
+			${venuePointer ? db`AND c."_p_venue" = ${venuePointer}` : db``}
+			ORDER BY c."concert_date" DESC
+			LIMIT ${limit}
+			OFFSET ${skip}
+		`;
 
-			// Artist filter
-			if (artist_id) {
-				const artistPointer =
-					Parse.Object.extend("Artist").createWithoutData(artist_id);
-				concertSubquery.equalTo("artist", artistPointer);
-			}
+		// Get total count
+		const countResult = await db`
+			SELECT COUNT(*)::int as total
+			FROM "UserConcert" uc
+			JOIN "Concert" c ON c."objectId" = SPLIT_PART(uc."_p_concert", '$', 2)
+			WHERE uc."_p_user" = ${userPointer}
+			${today ? db`AND c."concert_date" < ${today}` : db``}
+			${startDate ? db`AND c."concert_date" >= ${startDate}` : db``}
+			${endDate ? db`AND c."concert_date" <= ${endDate}` : db``}
+			${artistPointer ? db`AND c."_p_artist" = ${artistPointer}` : db``}
+			${venuePointer ? db`AND c."_p_venue" = ${venuePointer}` : db``}
+		`;
 
-			// Venue filter
-			if (venue_id) {
-				const venuePointer =
-					Parse.Object.extend("Venue").createWithoutData(venue_id);
-				concertSubquery.equalTo("venue", venuePointer);
-			}
+		const total = countResult[0]?.total || 0;
 
-			query.matchesQuery("concert", concertSubquery);
-		}
-
-		const [results, total] = await Promise.all([
-			query.find(),
-			query.count({ useMasterKey: true }),
-		]);
+		// Transform results to match Parse format
+		const formattedResults = results.map((row: any) => ({
+			objectId: row.userConcert_id,
+			notes: row.notes,
+			personal_setlist: row.personal_setlist,
+			rating: row.rating,
+			is_favorite: row.is_favorite,
+			like_count: row.like_count,
+			comment_count: row.comment_count,
+			createdAt: row.userConcert_createdAt,
+			updatedAt: row.userConcert_updatedAt,
+			concert: {
+				objectId: row.concert_id,
+				concert_date: row.concert_date,
+				tour_name: row.tour_name,
+				attendee_count: row.attendee_count,
+				createdAt: row.concert_createdAt,
+				artist: {
+					objectId: row.artist_id,
+					name: row.artist_name,
+					slug: row.artist_slug,
+					image_url: row.artist_image_url,
+					spotify_id: row.artist_spotify_id,
+					verified: row.artist_verified,
+					__type: "Object",
+					className: "Artist",
+				},
+				venue: {
+					objectId: row.venue_id,
+					name: row.venue_name,
+					slug: row.venue_slug,
+					city: row.venue_city,
+					country: row.venue_country,
+					capacity: row.venue_capacity,
+					__type: "Object",
+					className: "Venue",
+				},
+				__type: "Object",
+				className: "Concert",
+			},
+			__type: "Object",
+			className: "UserConcert",
+		}));
 
 		return {
-			results: results.map((userConcert) => userConcert.toJSON()),
-			count: results.length,
+			results: formattedResults,
+			count: formattedResults.length,
 			total,
 			can_see_upcoming: canSeeUpcoming,
 		};
