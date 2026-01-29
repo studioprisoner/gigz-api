@@ -347,22 +347,23 @@ Parse.Cloud.define(
 		};
 
 		// Transform results to match Parse format
+		// Note: PostgreSQL converts unquoted column aliases to lowercase
 		const formattedResults = results.map((row: any) => ({
-			objectId: row.userConcert_id,
+			objectId: row.userconcert_id,
 			notes: row.notes,
 			personal_setlist: row.personal_setlist,
 			rating: row.rating,
 			is_favorite: row.is_favorite,
 			like_count: row.like_count,
 			comment_count: row.comment_count,
-			createdAt: formatDate(row.userConcert_createdAt),
-			updatedAt: formatDate(row.userConcert_updatedAt),
+			createdAt: formatDate(row.userconcert_createdat),
+			updatedAt: formatDate(row.userconcert_updatedat),
 			concert: {
 				objectId: row.concert_id,
 				concert_date: formatDate(row.concert_date),
 				tour_name: row.tour_name,
 				attendee_count: row.attendee_count,
-				createdAt: formatDate(row.concert_createdAt),
+				createdAt: formatDate(row.concert_createdat),
 				artist: {
 					objectId: row.artist_id,
 					name: row.artist_name,
