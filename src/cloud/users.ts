@@ -654,66 +654,13 @@ Parse.Cloud.afterSave("_User", async (request) => {
 });
 
 /**
- * Before user signup - set default values and handle Apple migration
+ * Before user signup - set default values
  */
 Parse.Cloud.beforeSave("_User", async (request) => {
 	const user = request.object;
 
-	// Handle Apple sign-in migration logic for new users
+	// Set defaults for new users
 	if (!user.existed()) {
-		const authData = user.get("authData");
-		const appleAuthData = authData?.apple;
-
-		// If this is an Apple sign-in, check for existing migrated user by email
-		if (appleAuthData?.id) {
-			console.log(`[beforeSave] New Apple user with ID: ${appleAuthData.id}`);
-
-			// Extract email from Apple ID token
-			let email: string | undefined;
-			if (appleAuthData.token) {
-				try {
-					const tokenPayload = JSON.parse(Buffer.from(appleAuthData.token.split('.')[1], 'base64').toString());
-					email = tokenPayload.email;
-					console.log(`[beforeSave] Extracted email from token: ${email}`);
-				} catch (error) {
-					console.log(`[beforeSave] Could not extract email from token:`, error);
-				}
-			}
-
-			// If we have an email, check for existing migrated user
-			if (email) {
-				const emailQuery = new Parse.Query(Parse.User);
-				emailQuery.equalTo("email", email);
-				emailQuery.exists("authData");
-				const existingUser = await emailQuery.first({ useMasterKey: true });
-
-				if (existingUser) {
-					const existingAuthData = existingUser.get("authData");
-					// Check if this user has a migrated Apple auth (starts with "apple_migrated_")
-					if (existingAuthData?.apple?.id?.startsWith("apple_migrated_")) {
-						console.log(`[beforeSave] Found migrated user by email, preventing new user creation and updating existing user with real Apple ID`);
-
-						// Update the existing user's Apple ID to the real one
-						const updatedAuthData = { ...existingAuthData };
-						updatedAuthData.apple.id = appleAuthData.id;
-						updatedAuthData.apple.token = appleAuthData.token;
-						existingUser.set("authData", updatedAuthData);
-						await existingUser.save(null, { useMasterKey: true });
-
-						// Prevent new user creation by throwing error with existing user info
-						throw new Parse.Error(
-							Parse.Error.ACCOUNT_ALREADY_LINKED,
-							JSON.stringify({
-								existingUserId: existingUser.id,
-								message: "Apple account linked to existing user"
-							})
-						);
-					}
-				}
-			}
-		}
-
-		// Set defaults for new users (only if we get here)
 		if (!user.get("subscription_status")) {
 			user.set("subscription_status", "free");
 		}

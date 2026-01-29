@@ -57,16 +57,17 @@ export const parseConfig: ParseServerOptions = {
 		},
 	}),
 
-	// Authentication adapters
-	auth: {
-		apple: {
-			clientId: process.env.APPLE_BUNDLE_ID,
-		},
-		// Google can be added later
-		// google: {
-		//   clientId: process.env.GOOGLE_CLIENT_ID,
-		// },
-	},
+	// Authentication adapters - disabled to force custom cloud functions
+	// Apple auth handled by signInWithApple cloud function for migration compatibility
+	// auth: {
+	// 	apple: {
+	// 		clientId: process.env.APPLE_BUNDLE_ID,
+	// 	},
+	// 	// Google can be added later
+	// 	// google: {
+	// 	//   clientId: process.env.GOOGLE_CLIENT_ID,
+	// 	// },
+	// },
 
 	// Email adapter for password reset (Resend)
 	// Note: verifyUserEmails disabled - OTP already proves email ownership
