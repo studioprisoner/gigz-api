@@ -155,15 +155,33 @@ Parse.Cloud.define(
 			}
 
 			// Check if user already exists with this Apple ID
-			// Search for users with Apple auth data and then filter manually
-			const allUsersQuery = new Parse.Query(Parse.User);
-			allUsersQuery.exists("authData");
-			const usersWithAuth = await allUsersQuery.find({ useMasterKey: true });
+			// Use direct database query for better performance
+			let existingUser = null;
+			try {
+				// Use a more efficient query to find Apple users
+				const appleUserQuery = new Parse.Query(Parse.User);
+				appleUserQuery.contains("authData", `"id":"${appleUserId}"`);
+				existingUser = await appleUserQuery.first({ useMasterKey: true });
 
-			let existingUser = usersWithAuth.find(user => {
-				const authData = user.get("authData");
-				return authData?.apple?.id === appleUserId;
-			}) || null;
+				console.log(`[signInWithApple] Direct Apple ID query result: ${existingUser ? `found user ${existingUser.id}` : 'no user found'}`);
+			} catch (error) {
+				console.log(`[signInWithApple] Direct query failed, falling back to manual search: ${error}`);
+
+				// Fallback to original approach if direct query fails
+				const allUsersQuery = new Parse.Query(Parse.User);
+				allUsersQuery.exists("authData");
+				allUsersQuery.limit(100); // Limit to prevent memory issues
+				const usersWithAuth = await allUsersQuery.find({ useMasterKey: true });
+
+				console.log(`[signInWithApple] Fetched ${usersWithAuth.length} users with auth data for manual search`);
+
+				existingUser = usersWithAuth.find(user => {
+					const authData = user.get("authData");
+					const appleId = authData?.apple?.id;
+					console.log(`[signInWithApple] Comparing Apple IDs: ${appleId} === ${appleUserId} = ${appleId === appleUserId}`);
+					return appleId === appleUserId;
+				}) || null;
+			}
 
 			// If no exact Apple ID match and we have an email, check for migrated users by email
 			if (!existingUser && emailToUse) {
