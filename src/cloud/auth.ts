@@ -219,6 +219,30 @@ Parse.Cloud.define(
 					anyUserQuery.equalTo("email", emailToUse);
 					const anyUser = await anyUserQuery.first({ useMasterKey: true });
 					console.log(`[signInWithApple] Any user lookup result: ${anyUser ? `found user ${anyUser.id} with authData: ${JSON.stringify(anyUser.get("authData"))}` : 'no user found'}`);
+
+					// If we found a user without authData, this is likely a migrated user
+					// Set them as the existing user and add Apple authData
+					if (anyUser) {
+						console.log(`[signInWithApple] Found user without authData, setting up Apple auth for user ${anyUser.id}`);
+						existingUser = anyUser;
+
+						// Set up Apple authData for this user
+						const currentAuthData = existingUser.get("authData") || {};
+						currentAuthData.apple = {
+							id: appleUserId,
+							token: identityToken,
+						};
+						existingUser.set("authData", currentAuthData);
+
+						// Update email if it's different (in case of case differences)
+						const currentEmail = existingUser.get("email");
+						if (emailToUse && currentEmail?.toLowerCase() !== emailToUse.toLowerCase()) {
+							existingUser.set("email", emailToUse);
+						}
+
+						await existingUser.save(null, { useMasterKey: true });
+						console.log(`[signInWithApple] Successfully added Apple authData to existing user ${existingUser.id}`);
+					}
 				}
 			}
 

@@ -17,7 +17,9 @@
 		"migrate-single-user": "bun run migrations/migrate-single-user.ts",
 		"migrate-photos": "bun run migrations/migrate-photos-to-r2.ts",
 		"validate": "bun run migrations/validate-migration.ts",
-		"link-apple": "bun run migrations/link-apple-auth.ts"
+		"link-apple": "bun run migrations/link-apple-auth.ts",
+		"add-apple-auth": "bun run migrations/add-apple-auth-to-user.ts",
+		"add-apple-auth-prod": "bun run migrations/add-apple-auth-to-user-prod.ts"
 	},
 	"dependencies": {
 		"@aws-sdk/client-s3": "^3.970.0",
