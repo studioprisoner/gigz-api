@@ -174,8 +174,12 @@ Parse.Cloud.define(
 				emailQuery.exists("authData");
 				const userByEmail = await emailQuery.first({ useMasterKey: true });
 
+				console.log(`[signInWithApple] Email lookup result: ${userByEmail ? `found user ${userByEmail.id}` : 'no user found'}`);
+
 				if (userByEmail) {
 					const authData = userByEmail.get("authData");
+					console.log(`[signInWithApple] Found user authData: ${JSON.stringify(authData)}`);
+
 					// Check if this user has a migrated Apple auth (starts with "apple_migrated_")
 					if (authData?.apple?.id?.startsWith("apple_migrated_")) {
 						console.log(`[signInWithApple] Found migrated user by email, updating Apple ID from ${authData.apple.id} to ${appleUserId}`);
@@ -187,7 +191,16 @@ Parse.Cloud.define(
 						updatedAuthData.apple.token = identityToken;
 						existingUser.set("authData", updatedAuthData);
 						await existingUser.save(null, { useMasterKey: true });
+					} else {
+						console.log(`[signInWithApple] User found by email but no migrated Apple auth. Apple ID: ${authData?.apple?.id}`);
 					}
+				} else {
+					// Let's also check for users without authData requirement
+					console.log(`[signInWithApple] No user with authData found, checking for any user with email ${emailToUse}`);
+					const anyUserQuery = new Parse.Query(Parse.User);
+					anyUserQuery.equalTo("email", emailToUse);
+					const anyUser = await anyUserQuery.first({ useMasterKey: true });
+					console.log(`[signInWithApple] Any user lookup result: ${anyUser ? `found user ${anyUser.id} with authData: ${JSON.stringify(anyUser.get("authData"))}` : 'no user found'}`);
 				}
 			}
 
