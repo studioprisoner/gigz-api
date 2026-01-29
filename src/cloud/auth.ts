@@ -140,6 +140,13 @@ Parse.Cloud.define(
 			);
 			const appleUserId = payload.sub;
 
+			// Extract email from token if not provided in params
+			// Apple includes email in the JWT token payload
+			const tokenEmail = payload.email;
+			const emailToUse = email || tokenEmail;
+
+			console.log(`[signInWithApple] Apple ID: ${appleUserId}, Email from params: ${email || 'none'}, Email from token: ${tokenEmail || 'none'}, Using: ${emailToUse || 'none'}`);
+
 			if (!appleUserId) {
 				throw new Parse.Error(
 					Parse.Error.INVALID_VALUE,
@@ -159,11 +166,11 @@ Parse.Cloud.define(
 			}) || null;
 
 			// If no exact Apple ID match and we have an email, check for migrated users by email
-			if (!existingUser && email) {
-				console.log(`[signInWithApple] No exact Apple ID match found for ${appleUserId}, checking by email: ${email}`);
+			if (!existingUser && emailToUse) {
+				console.log(`[signInWithApple] No exact Apple ID match found for ${appleUserId}, checking by email: ${emailToUse}`);
 
 				const emailQuery = new Parse.Query(Parse.User);
-				emailQuery.equalTo("email", email);
+				emailQuery.equalTo("email", emailToUse);
 				emailQuery.exists("authData");
 				const userByEmail = await emailQuery.first({ useMasterKey: true });
 
