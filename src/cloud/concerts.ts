@@ -50,9 +50,18 @@ async function findOrCreateConcert(
 	tour_name?: string
 ): Promise<Parse.Object> {
 	// Check if Concert event already exists
+	// WORKAROUND: Use objectId matching instead of pointer matching due to schema issues
 	const concertQuery = new Parse.Query("Concert");
-	concertQuery.equalTo("artist", artist);
-	concertQuery.equalTo("venue", venue);
+	concertQuery.equalTo("artist", {
+		__type: "Pointer",
+		className: "Artist",
+		objectId: artist.id
+	});
+	concertQuery.equalTo("venue", {
+		__type: "Pointer",
+		className: "Venue",
+		objectId: venue.id
+	});
 
 	// Date comparison within same day
 	const startOfDay = new Date(concert_date);
