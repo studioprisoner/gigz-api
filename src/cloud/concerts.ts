@@ -169,64 +169,41 @@ Parse.Cloud.define(
 			);
 		}
 
-		// ULTIMATE WORKAROUND: Direct database insert to completely bypass Parse Server
-		// Parse has a critical bug where it caches schemas and ignores database updates
-		console.log(`[addConcert] Using direct SQL insert workaround for user ${user.id}`);
+		// FIXED: Create UserConcert using Parse SDK with proper pointer setup
+		// The issue was duplicate columns from migration - we need to set BOTH old and new pointer formats
+		const UserConcert = Parse.Object.extend("UserConcert");
+		const userConcert = new UserConcert();
 
-		const objectId = require('crypto').randomBytes(10).toString('hex');
-		const now = new Date();
+		// Set all fields including the user pointer
+		userConcert.set("user", user);
+		userConcert.set("concert", concert);
+		userConcert.set("notes", notes?.trim());
+		userConcert.set("personal_setlist", setlist);
+		userConcert.set("rating", rating);
 
-		// Build ACL
-		const acl = {};
-		acl[user.id] = { read: true, write: true };
-		acl["*"] = { read: true };
+		if (setlist_unavailable !== undefined) {
+			userConcert.set("setlist_unavailable", setlist_unavailable);
+		}
 
-		// Direct SQL insert
-		const result = await db.query(`
-			INSERT INTO "UserConcert" (
-				"objectId",
-				"_p_user",
-				"_p_concert",
-				"notes",
-				"personal_setlist",
-				"rating",
-				"setlist_unavailable",
-				"_acl",
-				"createdAt",
-				"updatedAt"
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10)
-			RETURNING *
-		`, [
-			objectId,
-			`_User$${user.id}`,
-			`Concert$${concert.id}`,
-			notes ? notes.trim() : null,
-			setlist ? JSON.stringify(setlist) : null,
-			rating || null,
-			setlist_unavailable === undefined ? null : setlist_unavailable,
-			JSON.stringify(acl),
-			now,
-			now
-		]);
+		// Set ACL - user can read/write their own concert record
+		const acl = new Parse.ACL();
+		acl.setPublicReadAccess(true);
+		acl.setReadAccess(user, true);
+		acl.setWriteAccess(user, true);
+		userConcert.setACL(acl);
 
-		console.log(`[addConcert] Successfully created UserConcert ${objectId}`);
+		// Save with master key to bypass any permission issues
+		await userConcert.save(null, { useMasterKey: true });
+
+		console.log(`[addConcert] Successfully created UserConcert ${userConcert.id} for user ${user.id}`);
 
 		// Update user's total_gigs count
 		user.increment("total_gigs");
 		await user.save(null, { useMasterKey: true });
 
-		// Return with full data included
-		const userConcertData = {
-			objectId,
-			user: user.toJSON(),
-			concert: concert.toJSON(),
-			notes: notes?.trim(),
-			personal_setlist: setlist,
-			rating,
-			setlist_unavailable,
-			createdAt: { __type: "Date", iso: now.toISOString() },
-			updatedAt: { __type: "Date", iso: now.toISOString() }
-		};
+		// Return the created UserConcert with all relations included
+		const userConcertData = userConcert.toJSON();
+		userConcertData.concert = concert.toJSON();
 		userConcertData.concert.artist = artist.toJSON();
 		userConcertData.concert.venue = venue.toJSON();
 
