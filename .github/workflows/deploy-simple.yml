@@ -50,8 +50,13 @@ jobs:
             # Install dependencies
             bun install
 
-            # Restart service
-            systemctl restart gigz-api
+            # Clear bun cache to ensure fresh compilation
+            rm -rf node_modules/.cache
+            rm -rf ~/.bun/install/cache
+
+            # Restart service (stop then start to ensure clean restart)
+            systemctl stop gigz-api
+            systemctl start gigz-api
 
             # Wait for service to be ready
             sleep 5
