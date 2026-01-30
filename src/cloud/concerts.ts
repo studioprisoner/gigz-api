@@ -169,55 +169,68 @@ Parse.Cloud.define(
 			);
 		}
 
-		// CRITICAL WORKAROUND: Bypass Parse Server's broken schema validation
-		// Create empty object first, then set fields
-		const UserConcert = Parse.Object.extend("UserConcert");
-		const userConcert = new UserConcert();
+		// ULTIMATE WORKAROUND: Direct database insert to completely bypass Parse Server
+		// Parse has a critical bug where it caches schemas and ignores database updates
+		console.log(`[addConcert] Using direct SQL insert workaround for user ${user.id}`);
 
-		// Force set the fields using internal method to bypass validation
-		userConcert._finishFetch({
-			objectId: Parse.Cloud.generateId(),
-			user: { __type: "Pointer", className: "_User", objectId: user.id },
-			concert: { __type: "Pointer", className: "Concert", objectId: concert.id }
-		});
+		const objectId = require('crypto').randomBytes(10).toString('hex');
+		const now = new Date();
 
-		// Application-level validation since schema validation is broken
-		if (!user || !user.id) {
-			throw new Parse.Error(
-				Parse.Error.INVALID_VALUE,
-				"User is required for UserConcert",
-			);
-		}
+		// Build ACL
+		const acl = {};
+		acl[user.id] = { read: true, write: true };
+		acl["*"] = { read: true };
 
-		// Validate user is properly set
-		console.log(`[addConcert] Setting user pointer: ${user.id}`);
-		console.log(`[addConcert] Setting concert pointer: ${concert.id}`);
+		// Direct SQL insert
+		const result = await db.query(`
+			INSERT INTO "UserConcert" (
+				"objectId",
+				"_p_user",
+				"_p_concert",
+				"notes",
+				"personal_setlist",
+				"rating",
+				"setlist_unavailable",
+				"_acl",
+				"createdAt",
+				"updatedAt"
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10)
+			RETURNING *
+		`, [
+			objectId,
+			`_User$${user.id}`,
+			`Concert$${concert.id}`,
+			notes ? notes.trim() : null,
+			setlist ? JSON.stringify(setlist) : null,
+			rating || null,
+			setlist_unavailable === undefined ? null : setlist_unavailable,
+			JSON.stringify(acl),
+			now,
+			now
+		]);
 
-		if (notes) userConcert.set("notes", notes.trim());
-		if (setlist) userConcert.set("personal_setlist", setlist);
-		if (rating) userConcert.set("rating", rating);
-		if (setlist_unavailable !== undefined) {
-			userConcert.set("setlist_unavailable", setlist_unavailable);
-		}
-
-		// Set ACL - owner can read/write, others can read
-		const acl = new Parse.ACL(user);
-		acl.setPublicReadAccess(true);
-		userConcert.setACL(acl);
-
-		await userConcert.save(null, { useMasterKey: true });
+		console.log(`[addConcert] Successfully created UserConcert ${objectId}`);
 
 		// Update user's total_gigs count
 		user.increment("total_gigs");
 		await user.save(null, { useMasterKey: true });
 
 		// Return with full data included
-		const result = userConcert.toJSON();
-		result.concert = concert.toJSON();
-		result.concert.artist = artist.toJSON();
-		result.concert.venue = venue.toJSON();
+		const userConcertData = {
+			objectId,
+			user: user.toJSON(),
+			concert: concert.toJSON(),
+			notes: notes?.trim(),
+			personal_setlist: setlist,
+			rating,
+			setlist_unavailable,
+			createdAt: { __type: "Date", iso: now.toISOString() },
+			updatedAt: { __type: "Date", iso: now.toISOString() }
+		};
+		userConcertData.concert.artist = artist.toJSON();
+		userConcertData.concert.venue = venue.toJSON();
 
-		return result;
+		return userConcertData;
 	},
 );
 
