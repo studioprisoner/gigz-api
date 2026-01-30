@@ -135,8 +135,8 @@ export const schemas: SchemaDefinition[] = [
 	{
 		className: "Concert",
 		fields: {
-			artist: { type: "Pointer", targetClass: "Artist", required: true },
-			venue: { type: "Pointer", targetClass: "Venue", required: true },
+			artist: { type: "Pointer", targetClass: "Artist" },
+			venue: { type: "Pointer", targetClass: "Venue" },
 			concert_date: { type: "Date", required: true },
 			tour_name: { type: "String" },
 			official_setlist: { type: "Array" },
