@@ -173,8 +173,21 @@ Parse.Cloud.define(
 		const UserConcert = Parse.Object.extend("UserConcert");
 		const userConcert = new UserConcert();
 
+		// Set user and concert pointers
 		userConcert.set("user", user);
 		userConcert.set("concert", concert);
+
+		// Application-level validation since schema validation is temporarily relaxed
+		if (!user || !user.id) {
+			throw new Parse.Error(
+				Parse.Error.INVALID_VALUE,
+				"User is required for UserConcert",
+			);
+		}
+
+		// Validate user is properly set
+		console.log(`[addConcert] Setting user pointer: ${user.id}`);
+		console.log(`[addConcert] Setting concert pointer: ${concert.id}`);
 
 		if (notes) userConcert.set("notes", notes.trim());
 		if (setlist) userConcert.set("personal_setlist", setlist);

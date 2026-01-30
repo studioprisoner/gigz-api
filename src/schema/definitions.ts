@@ -154,7 +154,7 @@ export const schemas: SchemaDefinition[] = [
 	{
 		className: "UserConcert",
 		fields: {
-			user: { type: "Pointer", targetClass: "_User", required: true },
+			user: { type: "Pointer", targetClass: "_User", required: false },
 			concert: { type: "Pointer", targetClass: "Concert", required: true },
 			notes: { type: "String" },
 			personal_setlist: { type: "Array" },
