@@ -170,12 +170,12 @@ Parse.Cloud.define(
 		}
 
 		// Create UserConcert attendance record
+		// WORKAROUND: Creating object with user already set to bypass schema validation issue
 		const UserConcert = Parse.Object.extend("UserConcert");
-		const userConcert = new UserConcert();
-
-		// Set user and concert pointers
-		userConcert.set("user", user);
-		userConcert.set("concert", concert);
+		const userConcert = new UserConcert({
+			user: user,
+			concert: concert
+		});
 
 		// Application-level validation since schema validation is temporarily relaxed
 		if (!user || !user.id) {
