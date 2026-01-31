@@ -47,6 +47,7 @@ async function findOrCreateConcert(
 	artist: Parse.Object,
 	venue: Parse.Object,
 	concert_date: Date,
+	user: Parse.User,
 	tour_name?: string
 ): Promise<Parse.Object> {
 	// Check if Concert event already exists
@@ -90,6 +91,8 @@ async function findOrCreateConcert(
 	concert.set("venue", venue);
 	concert.set("concert_date", concert_date);
 	concert.set("attendee_count", 1);
+	// Required by existing schema
+	concert.set("user", user);
 
 	if (tour_name) concert.set("tour_name", tour_name.trim());
 
@@ -164,7 +167,13 @@ Parse.Cloud.define(
 		}
 
 		// Find or create the Concert event
-		const concert = await findOrCreateConcert(artist, venue, date, tour_name);
+		const concert = await findOrCreateConcert(
+			artist,
+			venue,
+			date,
+			user,
+			tour_name,
+		);
 
 		// Check if user already attended this concert
 		const duplicateQuery = new Parse.Query("UserConcert");
