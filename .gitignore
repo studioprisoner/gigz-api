@@ -44,3 +44,5 @@ docs
 CLAUDE.md
 .claude
 .cursor
+.agents
+AGENTS.md

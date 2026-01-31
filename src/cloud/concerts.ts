@@ -50,18 +50,9 @@ async function findOrCreateConcert(
 	tour_name?: string
 ): Promise<Parse.Object> {
 	// Check if Concert event already exists
-	// WORKAROUND: Use objectId matching instead of pointer matching due to schema issues
-	const concertQuery = new Parse.Query("Concert");
-	concertQuery.equalTo("artist", {
-		__type: "Pointer",
-		className: "Artist",
-		objectId: artist.id
-	});
-	concertQuery.equalTo("venue", {
-		__type: "Pointer",
-		className: "Venue",
-		objectId: venue.id
-	});
+	// WORKAROUND: Use direct SQL on _p_* pointer columns
+	const artistPointer = toPointer("Artist", artist.id);
+	const venuePointer = toPointer("Venue", venue.id);
 
 	// Date comparison within same day
 	const startOfDay = new Date(concert_date);
@@ -69,12 +60,22 @@ async function findOrCreateConcert(
 	const endOfDay = new Date(concert_date);
 	endOfDay.setHours(23, 59, 59, 999);
 
-	concertQuery.greaterThanOrEqualTo("concert_date", startOfDay);
-	concertQuery.lessThanOrEqualTo("concert_date", endOfDay);
+	const existingConcertResult = await db`
+		SELECT "objectId"
+		FROM "Concert"
+		WHERE "_p_artist" = ${artistPointer}
+			AND "_p_venue" = ${venuePointer}
+			AND "concert_date" >= ${startOfDay}
+			AND "concert_date" <= ${endOfDay}
+		LIMIT 1
+	`;
 
-	const existingConcert = await concertQuery.first({ useMasterKey: true });
-
-	if (existingConcert) {
+	const existingConcertId = existingConcertResult[0]?.objectId;
+	if (existingConcertId) {
+		const existingConcert = await new Parse.Query("Concert").get(
+			existingConcertId,
+			{ useMasterKey: true },
+		);
 		// Update attendee count
 		existingConcert.increment("attendee_count");
 		await existingConcert.save(null, { useMasterKey: true });
